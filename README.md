@@ -13,6 +13,7 @@ You will be prompted to enter a captain name and then can issue commands each tu
 - `north`, `south`, `east`, `west` &mdash; travel between sectors (moving costs fuel)
 - `status` &mdash; review the current turn, location, health, fuel, and credits
 - `rest` &mdash; recover a small amount of health at the cost of a little fuel
+- `ai <topic>` &mdash; have the ship AI fetch knowledge from the internet to gain AI knowledge points
 - `quit` &mdash; leave the game early
 
 Plan your routes carefully to discover profitable events, avoid hazards, and reach 100 credits before your ship runs out of fuel or falls apart.
