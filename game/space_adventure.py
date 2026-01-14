@@ -1,8 +1,12 @@
 """Interactive terminal-based space trading adventure game."""
 from __future__ import annotations
 
+import json
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import urlopen
 from typing import Dict, Tuple
 
 
@@ -44,6 +48,40 @@ class Player:
         return True
 
 
+@dataclass
+class ShipAI:
+    """Ship AI that fetches knowledge from the internet."""
+
+    knowledge_points: int = 0
+    topics: Dict[str, str] = field(default_factory=dict)
+
+    def learn(self, topic: str) -> str:
+        encoded_topic = quote(topic.strip().replace(" ", "_"))
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded_topic}"
+        try:
+            with urlopen(url, timeout=5) as response:
+                payload = json.load(response)
+        except (HTTPError, URLError, json.JSONDecodeError):
+            return (
+                "The ship AI could not reach the knowledge network right now. "
+                "Try again later."
+            )
+
+        extract = payload.get("extract")
+        if not extract:
+            return (
+                "The ship AI couldn't find reliable knowledge on that topic. "
+                "Try another subject."
+            )
+
+        self.topics[topic] = extract
+        self.knowledge_points += 1
+        return (
+            f"Ship AI ingested new knowledge about {topic}.\n"
+            f"{extract}"
+        )
+
+
 class Game:
     """Main game logic for the space adventure."""
 
@@ -51,6 +89,7 @@ class Game:
         self.player = player
         self.planet_events: Dict[Coordinate, str] = {}
         self.turn = 1
+        self.ship_ai = ShipAI()
 
     def _generate_event(self) -> str:
         events = (
@@ -92,9 +131,10 @@ class Game:
         return False
 
     def take_turn(self, command: str) -> bool:
-        command = command.lower().strip()
-        if command in {"north", "south", "east", "west"}:
-            if self.player.move(command):
+        command = command.strip()
+        normalized = command.lower()
+        if normalized in {"north", "south", "east", "west"}:
+            if self.player.move(normalized):
                 location = self.player.position
                 if location not in self.planet_events:
                     event = self._generate_event()
@@ -105,17 +145,24 @@ class Game:
                     print("You've been here before and nothing has changed.")
             else:
                 print("You can't travel that way.")
-        elif command == "status":
+        elif normalized == "status":
             self.print_status()
-        elif command == "rest":
+        elif normalized == "rest":
             self.player.adjust_health(5)
             self.player.adjust_fuel(-1)
             print("You take some time to recover.")
-        elif command == "quit":
+        elif normalized.startswith("ai"):
+            parts = command.split(maxsplit=1)
+            topic = parts[1] if len(parts) > 1 else "space exploration"
+            print(self.ship_ai.learn(topic))
+            self.player.adjust_fuel(-1)
+        elif normalized == "quit":
             print("Thanks for playing!")
             return False
         else:
-            print("Unknown command. Try north, south, east, west, status, rest, or quit.")
+            print(
+                "Unknown command. Try north, south, east, west, status, rest, ai <topic>, or quit."
+            )
 
         self.turn += 1
         self.player.adjust_fuel(-1)
@@ -126,7 +173,7 @@ class Game:
         print(
             f"Turn {self.turn}: {self.player.name} | Health: {self.player.health} "
             f"Fuel: {self.player.fuel} | Credits: {self.player.credits} | "
-            f"Location: {position}"
+            f"Location: {position} | AI Knowledge: {self.ship_ai.knowledge_points}"
         )
 
 
@@ -134,7 +181,7 @@ def greet_player() -> str:
     print(
         "Welcome to Star Trader!\n"
         "Earn 100 credits before you run out of fuel or health.\n"
-        "Commands: north, south, east, west, status, rest, quit.\n"
+        "Commands: north, south, east, west, status, rest, ai <topic>, quit.\n"
     )
     name = input("What is your captain's name? ").strip() or "Captain"
     return name
